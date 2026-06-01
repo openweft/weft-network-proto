@@ -1,7 +1,9 @@
 // network.proto — gRPC contract of weft-network, the controller that
 // reconciles Routers, Load Balancers, DNS zones / records, and
 // Scheduling Rules from the agent's event stream into the data plane
-// (Envoy + WireGuard + VyOS/FRR + CoreDNS).
+// (Caddy + WireGuard + GoBGP micro-VMs + CoreDNS ; VyOS / FRR remain
+// accepted as the classic-VM escape hatch for tenants who need
+// multi-protocol routing).
 //
 // weft-network runs as 3 infra microVMs (one per DC), etcd-elected
 // leader, fed by weft-agent's WatchEvents. The webui talks to whichever
@@ -18,7 +20,7 @@ option go_package = "github.com/openweft/weft-network-proto;netv1";
 
 // ------------------------------------------------------------------
 //  Routers : mesh ↔ mesh peering (WireGuard) or mesh ↔ outside
-//            (VyOS/FRR BGP egress + NAT).
+//            (GoBGP micro-VM as default ; VyOS / FRR as escape hatch).
 // ------------------------------------------------------------------
 
 // RouterInfo is one entry in the router registry.
@@ -27,14 +29,19 @@ option go_package = "github.com/openweft/weft-network-proto;netv1";
 //   - "peer"   : a WireGuard peer wiring two tenant networks together.
 //                Backend is always "wireguard". `peer_state` carries
 //                the live handshake info reported by the data plane.
-//   - "egress" : NAT / BGP gateway to the public internet. Backend is
-//                "vyos" or "frr". `external` describes the upstream
-//                (ASN, peer IP, …).
+//   - "egress" : BGP gateway to the public internet. Backend defaults
+//                to "gobgp" (the weft-router micro-VM running GoBGP +
+//                netlink — pure-Go, micro-VM-scaled, the openweft
+//                microVM-first strategy). "vyos" / "frr" remain
+//                accepted as escape hatches for tenants that need
+//                multi-protocol routing (OSPF / IS-IS / RSVP-TE) and
+//                run as classic VMs via `weft instance`.
+//                `external` describes the upstream (ASN, peer IP, …).
 message RouterInfo {
   string uuid               = 1;
   string name               = 2;
   string kind               = 3; // "peer" | "egress"
-  string backend            = 4; // "wireguard" | "vyos" | "frr"
+  string backend            = 4; // "wireguard" | "gobgp" | "vyos" | "frr"
   repeated string networks  = 5; // tenant network names this router stitches
   string external           = 6; // AS number / peer ; empty for `kind=peer`
   string peer_state         = 7; // live handshake info for `kind=peer`

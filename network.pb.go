@@ -1,7 +1,9 @@
 // network.proto — gRPC contract of weft-network, the controller that
 // reconciles Routers, Load Balancers, DNS zones / records, and
 // Scheduling Rules from the agent's event stream into the data plane
-// (Envoy + WireGuard + VyOS/FRR + CoreDNS).
+// (Caddy + WireGuard + GoBGP micro-VMs + CoreDNS ; VyOS / FRR remain
+// accepted as the classic-VM escape hatch for tenants who need
+// multi-protocol routing).
 //
 // weft-network runs as 3 infra microVMs (one per DC), etcd-elected
 // leader, fed by weft-agent's WatchEvents. The webui talks to whichever
@@ -40,15 +42,20 @@ const (
 //   - "peer"   : a WireGuard peer wiring two tenant networks together.
 //     Backend is always "wireguard". `peer_state` carries
 //     the live handshake info reported by the data plane.
-//   - "egress" : NAT / BGP gateway to the public internet. Backend is
-//     "vyos" or "frr". `external` describes the upstream
-//     (ASN, peer IP, …).
+//   - "egress" : BGP gateway to the public internet. Backend defaults
+//     to "gobgp" (the weft-router micro-VM running GoBGP +
+//     netlink — pure-Go, micro-VM-scaled, the openweft
+//     microVM-first strategy). "vyos" / "frr" remain
+//     accepted as escape hatches for tenants that need
+//     multi-protocol routing (OSPF / IS-IS / RSVP-TE) and
+//     run as classic VMs via `weft instance`.
+//     `external` describes the upstream (ASN, peer IP, …).
 type RouterInfo struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Uuid            string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Kind            string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                            // "peer" | "egress"
-	Backend         string                 `protobuf:"bytes,4,opt,name=backend,proto3" json:"backend,omitempty"`                      // "wireguard" | "vyos" | "frr"
+	Backend         string                 `protobuf:"bytes,4,opt,name=backend,proto3" json:"backend,omitempty"`                      // "wireguard" | "gobgp" | "vyos" | "frr"
 	Networks        []string               `protobuf:"bytes,5,rep,name=networks,proto3" json:"networks,omitempty"`                    // tenant network names this router stitches
 	External        string                 `protobuf:"bytes,6,opt,name=external,proto3" json:"external,omitempty"`                    // AS number / peer ; empty for `kind=peer`
 	PeerState       string                 `protobuf:"bytes,7,opt,name=peer_state,json=peerState,proto3" json:"peer_state,omitempty"` // live handshake info for `kind=peer`

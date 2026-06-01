@@ -1,7 +1,9 @@
 // network.proto — gRPC contract of weft-network, the controller that
 // reconciles Routers, Load Balancers, DNS zones / records, and
 // Scheduling Rules from the agent's event stream into the data plane
-// (Envoy + WireGuard + VyOS/FRR + CoreDNS).
+// (Caddy + WireGuard + GoBGP micro-VMs + CoreDNS ; VyOS / FRR remain
+// accepted as the classic-VM escape hatch for tenants who need
+// multi-protocol routing).
 //
 // weft-network runs as 3 infra microVMs (one per DC), etcd-elected
 // leader, fed by weft-agent's WatchEvents. The webui talks to whichever

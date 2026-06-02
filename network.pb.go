@@ -62,8 +62,14 @@ type RouterInfo struct {
 	Project         string                 `protobuf:"bytes,8,opt,name=project,proto3" json:"project,omitempty"`                      // owning project ; "platform" for infra routers
 	Status          string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`                        // "active" | "down" | "configuring"
 	CreatedAtUnixNs int64                  `protobuf:"varint,10,opt,name=created_at_unix_ns,json=createdAtUnixNs,proto3" json:"created_at_unix_ns,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Prefixes the router advertises to its peers (kind=egress + backend=gobgp).
+	// CIDR strings, IPv4 or IPv6 ; one entry per advertised prefix. Empty for
+	// kind=peer routers. Optional communities / per-prefix next-hops will land
+	// in a separate field shape when the operator workflow asks for them ;
+	// today this single list covers the 99% case of "advertise my owned space".
+	Prefixes      []string `protobuf:"bytes,11,rep,name=prefixes,proto3" json:"prefixes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RouterInfo) Reset() {
@@ -164,6 +170,13 @@ func (x *RouterInfo) GetCreatedAtUnixNs() int64 {
 		return x.CreatedAtUnixNs
 	}
 	return 0
+}
+
+func (x *RouterInfo) GetPrefixes() []string {
+	if x != nil {
+		return x.Prefixes
+	}
+	return nil
 }
 
 type ListRoutersRequest struct {
@@ -286,6 +299,7 @@ type CreateRouterRequest struct {
 	Backend       string                 `protobuf:"bytes,4,opt,name=backend,proto3" json:"backend,omitempty"`
 	Networks      []string               `protobuf:"bytes,5,rep,name=networks,proto3" json:"networks,omitempty"`
 	External      string                 `protobuf:"bytes,6,opt,name=external,proto3" json:"external,omitempty"`
+	Prefixes      []string               `protobuf:"bytes,7,rep,name=prefixes,proto3" json:"prefixes,omitempty"` // see RouterInfo.prefixes
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -360,6 +374,13 @@ func (x *CreateRouterRequest) GetExternal() string {
 		return x.External
 	}
 	return ""
+}
+
+func (x *CreateRouterRequest) GetPrefixes() []string {
+	if x != nil {
+		return x.Prefixes
+	}
+	return nil
 }
 
 type CreateRouterResponse struct {
@@ -2333,7 +2354,7 @@ var File_network_proto protoreflect.FileDescriptor
 
 const file_network_proto_rawDesc = "" +
 	"\n" +
-	"\rnetwork.proto\x12\x0fweft.network.v1\"\x98\x02\n" +
+	"\rnetwork.proto\x12\x0fweft.network.v1\"\xb4\x02\n" +
 	"\n" +
 	"RouterInfo\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x12\n" +
@@ -2347,7 +2368,8 @@ const file_network_proto_rawDesc = "" +
 	"\aproject\x18\b \x01(\tR\aproject\x12\x16\n" +
 	"\x06status\x18\t \x01(\tR\x06status\x12+\n" +
 	"\x12created_at_unix_ns\x18\n" +
-	" \x01(\x03R\x0fcreatedAtUnixNs\"c\n" +
+	" \x01(\x03R\x0fcreatedAtUnixNs\x12\x1a\n" +
+	"\bprefixes\x18\v \x03(\tR\bprefixes\"c\n" +
 	"\x12ListRoutersRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x1d\n" +
@@ -2355,14 +2377,15 @@ const file_network_proto_rawDesc = "" +
 	"page_token\x18\x03 \x01(\tR\tpageToken\"t\n" +
 	"\x13ListRoutersResponse\x125\n" +
 	"\arouters\x18\x01 \x03(\v2\x1b.weft.network.v1.RouterInfoR\arouters\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xa9\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xc5\x01\n" +
 	"\x13CreateRouterRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x18\n" +
 	"\abackend\x18\x04 \x01(\tR\abackend\x12\x1a\n" +
 	"\bnetworks\x18\x05 \x03(\tR\bnetworks\x12\x1a\n" +
-	"\bexternal\x18\x06 \x01(\tR\bexternal\"K\n" +
+	"\bexternal\x18\x06 \x01(\tR\bexternal\x12\x1a\n" +
+	"\bprefixes\x18\a \x03(\tR\bprefixes\"K\n" +
 	"\x14CreateRouterResponse\x123\n" +
 	"\x06router\x18\x01 \x01(\v2\x1b.weft.network.v1.RouterInfoR\x06router\")\n" +
 	"\x13DeleteRouterRequest\x12\x12\n" +

@@ -82,8 +82,10 @@ message DeleteRouterResponse {}
 
 // ------------------------------------------------------------------
 //  Load Balancers : programmable L4 / L7 in front of microVMs and
-//                   instances. Backed by Envoy on per-DC infra microVMs,
-//                   programmed via xDS by weft-network.
+//                   instances. Backed by embedded Caddy (caddy-l4 for
+//                   L4) inside weft-agent, programmed via Caddy's
+//                   admin API — no separate Envoy fleet, no xDS push.
+//                   See project_router_lb_gonative memory for context.
 // ------------------------------------------------------------------
 
 message LoadBalancerInfo {
@@ -94,7 +96,7 @@ message LoadBalancerInfo {
   uint32 port               = 5;
   repeated string backends  = 6; // VM / instance names this LB fronts
   string az                 = 7; // "DC-A" / "DC-B" / "DC-C" / "multi"
-  string controller         = 8; // weft-network instance currently owning the xDS stream
+  string controller         = 8; // weft-network instance currently owning the Caddy reconciler
   string project            = 9;
   string status             = 10; // "active" | "provisioning" | "failed"
   int64  created_at_unix_ns = 11;
@@ -124,8 +126,8 @@ message DeleteLoadBalancerRequest  { string uuid = 1; }
 message DeleteLoadBalancerResponse {}
 
 // SetLoadBalancerBackends replaces the backend list atomically. The
-// reconciler diffs against the live state and pushes only the deltas
-// to Envoy.
+// reconciler diffs against the live state and patches the embedded
+// Caddy config via its admin API (only the changed upstream pool).
 message SetLoadBalancerBackendsRequest  { string uuid = 1; repeated string backends = 2; }
 message SetLoadBalancerBackendsResponse { LoadBalancerInfo load_balancer = 1; }
 
@@ -218,8 +220,8 @@ message DeleteDNSRecordResponse {}
 //  Scheduling Rules : declarative constraints the agent's scheduler
 //                     honours when picking hosts. weft-network watches
 //                     them so the topology + LB controllers can pre-
-//                     warm xDS clusters and DNS records around the
-//                     placement intent.
+//                     warm Caddy upstream pools and DNS records around
+//                     the placement intent.
 // ------------------------------------------------------------------
 
 message SchedulingRuleInfo {

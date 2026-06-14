@@ -67,7 +67,18 @@ type RouterInfo struct {
 	// kind=peer routers. Optional communities / per-prefix next-hops will land
 	// in a separate field shape when the operator workflow asks for them ;
 	// today this single list covers the 99% case of "advertise my owned space".
-	Prefixes      []string `protobuf:"bytes,11,rep,name=prefixes,proto3" json:"prefixes,omitempty"`
+	Prefixes []string `protobuf:"bytes,11,rep,name=prefixes,proto3" json:"prefixes,omitempty"`
+	// Replicas is the number of weft-router microVMs spawned for this
+	// Router. Default 1 (single-VM, single point of failure).
+	// Production HA setup : set to 2 or 3, the orchestrator spawns one
+	// microVM per replica with deterministic names
+	// ("weft-router-<uuid>-1", "-2", ...). All replicas subscribe to
+	// the same NATS config subject + advertise the same prefixes ;
+	// the upstream peer load-balances inbound traffic via BGP
+	// multipath / ECMP. Failure of one replica drops a path ; the
+	// others stay live, the upstream redistributes within one BGP
+	// keepalive window. 1 ≤ replicas ≤ 10.
+	Replicas      int32 `protobuf:"varint,12,opt,name=replicas,proto3" json:"replicas,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -177,6 +188,13 @@ func (x *RouterInfo) GetPrefixes() []string {
 		return x.Prefixes
 	}
 	return nil
+}
+
+func (x *RouterInfo) GetReplicas() int32 {
+	if x != nil {
+		return x.Replicas
+	}
+	return 0
 }
 
 type ListRoutersRequest struct {
@@ -299,7 +317,8 @@ type CreateRouterRequest struct {
 	Backend       string                 `protobuf:"bytes,4,opt,name=backend,proto3" json:"backend,omitempty"`
 	Networks      []string               `protobuf:"bytes,5,rep,name=networks,proto3" json:"networks,omitempty"`
 	External      string                 `protobuf:"bytes,6,opt,name=external,proto3" json:"external,omitempty"`
-	Prefixes      []string               `protobuf:"bytes,7,rep,name=prefixes,proto3" json:"prefixes,omitempty"` // see RouterInfo.prefixes
+	Prefixes      []string               `protobuf:"bytes,7,rep,name=prefixes,proto3" json:"prefixes,omitempty"`  // see RouterInfo.prefixes
+	Replicas      int32                  `protobuf:"varint,8,opt,name=replicas,proto3" json:"replicas,omitempty"` // see RouterInfo.replicas ; 0 → default 1
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -381,6 +400,13 @@ func (x *CreateRouterRequest) GetPrefixes() []string {
 		return x.Prefixes
 	}
 	return nil
+}
+
+func (x *CreateRouterRequest) GetReplicas() int32 {
+	if x != nil {
+		return x.Replicas
+	}
+	return 0
 }
 
 type CreateRouterResponse struct {
@@ -516,7 +542,7 @@ type LoadBalancerInfo struct {
 	Port            uint32                 `protobuf:"varint,5,opt,name=port,proto3" json:"port,omitempty"`
 	Backends        []string               `protobuf:"bytes,6,rep,name=backends,proto3" json:"backends,omitempty"`     // VM / instance names this LB fronts
 	Az              string                 `protobuf:"bytes,7,opt,name=az,proto3" json:"az,omitempty"`                 // "DC-A" / "DC-B" / "DC-C" / "multi"
-	Controller      string                 `protobuf:"bytes,8,opt,name=controller,proto3" json:"controller,omitempty"` // weft-network instance currently owning the xDS stream
+	Controller      string                 `protobuf:"bytes,8,opt,name=controller,proto3" json:"controller,omitempty"` // weft-network instance currently owning the Caddy reconciler
 	Project         string                 `protobuf:"bytes,9,opt,name=project,proto3" json:"project,omitempty"`
 	Status          string                 `protobuf:"bytes,10,opt,name=status,proto3" json:"status,omitempty"` // "active" | "provisioning" | "failed"
 	CreatedAtUnixNs int64                  `protobuf:"varint,11,opt,name=created_at_unix_ns,json=createdAtUnixNs,proto3" json:"created_at_unix_ns,omitempty"`
@@ -952,8 +978,8 @@ func (*DeleteLoadBalancerResponse) Descriptor() ([]byte, []int) {
 }
 
 // SetLoadBalancerBackends replaces the backend list atomically. The
-// reconciler diffs against the live state and pushes only the deltas
-// to Envoy.
+// reconciler diffs against the live state and patches the embedded
+// Caddy config via its admin API (only the changed upstream pool).
 type SetLoadBalancerBackendsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uuid          string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
@@ -2354,7 +2380,7 @@ var File_network_proto protoreflect.FileDescriptor
 
 const file_network_proto_rawDesc = "" +
 	"\n" +
-	"\rnetwork.proto\x12\x0fweft.network.v1\"\xb4\x02\n" +
+	"\rnetwork.proto\x12\x0fweft.network.v1\"\xd0\x02\n" +
 	"\n" +
 	"RouterInfo\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x12\n" +
@@ -2369,7 +2395,8 @@ const file_network_proto_rawDesc = "" +
 	"\x06status\x18\t \x01(\tR\x06status\x12+\n" +
 	"\x12created_at_unix_ns\x18\n" +
 	" \x01(\x03R\x0fcreatedAtUnixNs\x12\x1a\n" +
-	"\bprefixes\x18\v \x03(\tR\bprefixes\"c\n" +
+	"\bprefixes\x18\v \x03(\tR\bprefixes\x12\x1a\n" +
+	"\breplicas\x18\f \x01(\x05R\breplicas\"c\n" +
 	"\x12ListRoutersRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x1d\n" +
@@ -2377,7 +2404,7 @@ const file_network_proto_rawDesc = "" +
 	"page_token\x18\x03 \x01(\tR\tpageToken\"t\n" +
 	"\x13ListRoutersResponse\x125\n" +
 	"\arouters\x18\x01 \x03(\v2\x1b.weft.network.v1.RouterInfoR\arouters\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xc5\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xe1\x01\n" +
 	"\x13CreateRouterRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -2385,7 +2412,8 @@ const file_network_proto_rawDesc = "" +
 	"\abackend\x18\x04 \x01(\tR\abackend\x12\x1a\n" +
 	"\bnetworks\x18\x05 \x03(\tR\bnetworks\x12\x1a\n" +
 	"\bexternal\x18\x06 \x01(\tR\bexternal\x12\x1a\n" +
-	"\bprefixes\x18\a \x03(\tR\bprefixes\"K\n" +
+	"\bprefixes\x18\a \x03(\tR\bprefixes\x12\x1a\n" +
+	"\breplicas\x18\b \x01(\x05R\breplicas\"K\n" +
 	"\x14CreateRouterResponse\x123\n" +
 	"\x06router\x18\x01 \x01(\v2\x1b.weft.network.v1.RouterInfoR\x06router\")\n" +
 	"\x13DeleteRouterRequest\x12\x12\n" +

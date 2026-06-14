@@ -54,6 +54,17 @@ message RouterInfo {
   // in a separate field shape when the operator workflow asks for them ;
   // today this single list covers the 99% case of "advertise my owned space".
   repeated string prefixes  = 11;
+  // Replicas is the number of weft-router microVMs spawned for this
+  // Router. Default 1 (single-VM, single point of failure).
+  // Production HA setup : set to 2 or 3, the orchestrator spawns one
+  // microVM per replica with deterministic names
+  // ("weft-router-<uuid>-1", "-2", ...). All replicas subscribe to
+  // the same NATS config subject + advertise the same prefixes ;
+  // the upstream peer load-balances inbound traffic via BGP
+  // multipath / ECMP. Failure of one replica drops a path ; the
+  // others stay live, the upstream redistributes within one BGP
+  // keepalive window. 1 ≤ replicas ≤ 10.
+  int32  replicas           = 12;
 }
 
 message ListRoutersRequest  {
@@ -74,6 +85,7 @@ message CreateRouterRequest {
   repeated string networks = 5;
   string external         = 6;
   repeated string prefixes = 7; // see RouterInfo.prefixes
+  int32  replicas         = 8; // see RouterInfo.replicas ; 0 → default 1
 }
 message CreateRouterResponse { RouterInfo router = 1; }
 

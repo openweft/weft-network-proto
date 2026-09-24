@@ -9,7 +9,7 @@ from the agent's event stream into the data plane (embedded Caddy
 remain as escape hatches via `weft instance` for tenants that need
 multi-protocol routing).
 
-Sibling repo to [`weft-proto`](../weft-proto) — the two control
+Sibling repo to [`weft-proto`](https://github.com/openweft/weft-proto) — the two control
 planes scale independently (agent = identity / compute / storage ;
 network = traffic / naming / placement), so they own their own
 proto surface. Same conventions (`task proto` to regenerate stubs,

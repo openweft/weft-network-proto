@@ -1,6 +1,6 @@
 module github.com/openweft/weft-network-proto
 
-go 1.26.4
+go 1.27.1
 
 require (
 	google.golang.org/grpc v1.80.0
